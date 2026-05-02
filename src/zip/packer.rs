@@ -1,120 +1,94 @@
-use std::collections::HashSet;
-use std::fs::{self, File};
-use std::io::{self, BufReader, Cursor};
+use std::io::{self, Cursor, Write};
 
 use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
 use zip::ZipWriter;
 
-use crate::search::finder::LuaFile;
-
 type PackResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
 
-const MAX_FILES_PER_ARCHIVE: usize = 256;
-const MAX_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
+const MAX_LUA_BYTES: usize = 50 * 1024 * 1024;
 
-/// Pack files into a ZIP archive entirely in memory.
-///
-/// Source files are streamed from disk into `ZipWriter<Cursor<Vec<u8>>>`; no
-/// temporary archive file is created on disk.
-pub fn pack_files(files: &[LuaFile]) -> PackResult<Vec<u8>> {
-    validate_input(files)?;
+/// Pack one Lua file into a ZIP archive entirely in memory.
+pub fn pack_lua_from_memory(app_id: &str, lua_bytes: &[u8]) -> PackResult<Vec<u8>> {
+    validate_lua(app_id, lua_bytes)?;
 
     let cursor = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(cursor);
-    let mut used_names = HashSet::new();
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
         .unix_permissions(0o644);
 
-    for file in files {
-        let archive_path = unique_archive_path(&file.archive_path, &mut used_names);
-        let source = File::open(&file.source_path)?;
-        let mut source = BufReader::new(source);
-
-        zip.start_file(&archive_path, options)?;
-        io::copy(&mut source, &mut zip)?;
-
-        log::debug!("Added {} as {}", file.source_path.display(), archive_path);
-    }
+    let file_name = format!("{}.lua", sanitize_app_id(app_id));
+    zip.start_file(file_name, options)?;
+    zip.write_all(lua_bytes)?;
 
     let cursor = zip.finish()?;
     let bytes = cursor.into_inner();
 
     log::info!(
-        "ZIP created in memory: {} file(s), {} byte(s)",
-        files.len(),
+        "ZIP created in memory for AppID {}: {} byte(s)",
+        app_id,
         bytes.len()
     );
 
     Ok(bytes)
 }
 
-fn validate_input(files: &[LuaFile]) -> PackResult<()> {
-    if files.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "no files to pack").into());
+fn validate_lua(app_id: &str, lua_bytes: &[u8]) -> PackResult<()> {
+    if app_id.is_empty() || !app_id.chars().all(|ch| ch.is_ascii_digit()) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid AppID").into());
     }
 
-    if files.len() > MAX_FILES_PER_ARCHIVE {
+    if lua_bytes.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty Lua file").into());
+    }
+
+    if lua_bytes.len() > MAX_LUA_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
-                "too many files: {} > {}",
-                files.len(),
-                MAX_FILES_PER_ARCHIVE
+                "Lua file too large: {} bytes > {} bytes",
+                lua_bytes.len(),
+                MAX_LUA_BYTES
             ),
         )
         .into());
     }
 
-    let mut total_size = 0_u64;
-    for file in files {
-        let metadata = fs::metadata(&file.source_path)?;
-        if !metadata.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("not a regular file: {}", file.source_path.display()),
-            )
-            .into());
-        }
-
-        total_size = total_size
-            .checked_add(metadata.len())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "archive size overflow"))?;
-
-        if total_size > MAX_UNCOMPRESSED_BYTES {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "archive too large: {} bytes > {} bytes",
-                    total_size, MAX_UNCOMPRESSED_BYTES
-                ),
-            )
-            .into());
-        }
-    }
+    std::str::from_utf8(lua_bytes)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Lua file is not UTF-8 text"))?;
 
     Ok(())
 }
 
-fn unique_archive_path(path: &str, used_names: &mut HashSet<String>) -> String {
-    if used_names.insert(path.to_owned()) {
-        return path.to_owned();
-    }
-
-    for index in 2.. {
-        let candidate = append_suffix(path, index);
-        if used_names.insert(candidate.clone()) {
-            return candidate;
-        }
-    }
-
-    unreachable!("unbounded suffix loop must eventually find a unique name")
+fn sanitize_app_id(app_id: &str) -> String {
+    app_id
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .take(10)
+        .collect()
 }
 
-fn append_suffix(path: &str, index: usize) -> String {
-    match path.rfind('.') {
-        Some(dot_index) => format!("{}_{}{}", &path[..dot_index], index, &path[dot_index..]),
-        None => format!("{path}_{index}"),
+#[cfg(test)]
+mod tests {
+    use std::io::Read;
+
+    use zip::ZipArchive;
+
+    use super::*;
+
+    #[test]
+    fn packs_lua_bytes_without_touching_disk() {
+        let archive_bytes = pack_lua_from_memory("730", b"addappid(730)")
+            .expect("in-memory Lua packing should succeed");
+        let cursor = Cursor::new(archive_bytes);
+        let mut archive = ZipArchive::new(cursor).expect("ZIP should be readable");
+        let mut file = archive.by_name("730.lua").expect("Lua file should exist");
+        let mut body = String::new();
+
+        file.read_to_string(&mut body)
+            .expect("Lua file should be UTF-8 text");
+
+        assert_eq!(body, "addappid(730)");
     }
 }

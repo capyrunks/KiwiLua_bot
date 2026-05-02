@@ -2,15 +2,17 @@ use super::Lang;
 
 pub fn ready(lang: Lang) -> &'static str {
     match lang {
-        Lang::En => "🥝 Ready. Send a game AppID or name and I will return a ZIP with .lua files.",
-        Lang::Es => {
-            "🥝 Listo. Envíame un AppID o nombre de juego y te enviaré un ZIP con archivos .lua."
+        Lang::En => "🥝 Ready. Send a numeric AppID and I will return a ZIP with the Lua config.",
+        Lang::Es => "🥝 Listo. Envíame un AppID numérico y te enviaré un ZIP con el config Lua.",
+        Lang::Tr => "🥝 Hazırım. Sayısal bir AppID gönder; Lua config ZIP olarak gelsin.",
+        Lang::It => "🥝 Pronto. Invia un AppID numerico e ti invierò uno ZIP con il config Lua.",
+        Lang::Fr => {
+            "🥝 Prêt. Envoyez un AppID numérique et je renverrai un ZIP avec le config Lua."
         }
-        Lang::Tr => "🥝 Hazırım. Bir oyun AppID'si veya adı gönder; .lua dosyalarını ZIP olarak göndereyim.",
-        Lang::It => "🥝 Pronto. Inviami un AppID o nome del gioco e ti invierò uno ZIP con i file .lua.",
-        Lang::Fr => "🥝 Prêt. Envoyez un AppID ou un nom de jeu et je renverrai un ZIP avec les fichiers .lua.",
-        Lang::De => "🥝 Bereit. Sende eine AppID oder einen Spielnamen und ich schicke ein ZIP mit .lua-Dateien.",
-        Lang::Ru => "🥝 Готово. Отправьте AppID или название игры, и я пришлю ZIP с .lua файлами.",
+        Lang::De => {
+            "🥝 Bereit. Sende eine numerische AppID und ich schicke ein ZIP mit der Lua-Konfig."
+        }
+        Lang::Ru => "🥝 Готово. Отправьте числовой AppID, и я пришлю ZIP с Lua-конфигом.",
     }
 }
 
@@ -56,37 +58,37 @@ pub fn help_text(lang: Lang) -> &'static str {
 
 pub fn not_found(lang: Lang) -> &'static str {
     match lang {
-        Lang::En => "No .lua files were found for this query. Try an AppID like 730.",
-        Lang::Es => "No se encontraron archivos .lua. Prueba con un AppID como 730.",
-        Lang::Tr => ".lua dosyası bulunamadı. 730 gibi bir AppID deneyin.",
-        Lang::It => "Nessun file .lua trovato. Prova un AppID come 730.",
-        Lang::Fr => "Aucun fichier .lua trouvé. Essayez un AppID comme 730.",
-        Lang::De => "Keine .lua-Dateien gefunden. Versuche eine AppID wie 730.",
-        Lang::Ru => ".lua файлы не найдены. Попробуйте AppID, например 730.",
+        Lang::En => "No config was found for this AppID.",
+        Lang::Es => "No se encontró config para este AppID.",
+        Lang::Tr => "Bu AppID için config bulunamadı.",
+        Lang::It => "Nessun config trovato per questo AppID.",
+        Lang::Fr => "Aucun config trouvé pour cet AppID.",
+        Lang::De => "Keine Konfig für diese AppID gefunden.",
+        Lang::Ru => "Для этого AppID конфиг не найден.",
     }
 }
 
-pub fn sending_files(lang: Lang) -> &'static str {
+pub fn fetching_config(lang: Lang) -> &'static str {
     match lang {
-        Lang::En => "Packing files in memory and sending the archive...",
-        Lang::Es => "Empaquetando archivos en memoria y enviando el archivo...",
-        Lang::Tr => "Dosyalar bellekte paketleniyor ve arşiv gönderiliyor...",
-        Lang::It => "Impacchetto i file in memoria e invio l'archivio...",
-        Lang::Fr => "Compression des fichiers en mémoire et envoi de l'archive...",
-        Lang::De => "Dateien werden im Speicher gepackt und das Archiv wird gesendet...",
-        Lang::Ru => "Упаковываю файлы в оперативной памяти и отправляю архив...",
+        Lang::En => "Fetching the config from the cloud source...",
+        Lang::Es => "Buscando el config en la fuente cloud...",
+        Lang::Tr => "Config bulut kaynağından alınıyor...",
+        Lang::It => "Recupero il config dalla sorgente cloud...",
+        Lang::Fr => "Récupération du config depuis la source cloud...",
+        Lang::De => "Konfig wird aus der Cloud-Quelle geladen...",
+        Lang::Ru => "Забираю конфиг из облачного источника...",
     }
 }
 
 pub fn search_prompt(lang: Lang) -> &'static str {
     match lang {
-        Lang::En => "Send a game AppID or name to search for .lua files.",
-        Lang::Es => "Envía un AppID o nombre de juego para buscar archivos .lua.",
-        Lang::Tr => ".lua dosyalarını aramak için bir oyun AppID'si veya adı gönderin.",
-        Lang::It => "Invia un AppID o il nome del gioco per cercare file .lua.",
-        Lang::Fr => "Envoyez un AppID ou un nom de jeu pour rechercher des fichiers .lua.",
-        Lang::De => "Sende eine AppID oder einen Spielnamen, um .lua-Dateien zu suchen.",
-        Lang::Ru => "Отправьте AppID или название игры для поиска .lua файлов.",
+        Lang::En => "Send a numeric Steam AppID.",
+        Lang::Es => "Envía un AppID numérico de Steam.",
+        Lang::Tr => "Sayısal bir Steam AppID gönderin.",
+        Lang::It => "Invia un AppID Steam numerico.",
+        Lang::Fr => "Envoyez un AppID Steam numérique.",
+        Lang::De => "Sende eine numerische Steam-AppID.",
+        Lang::Ru => "Отправьте числовой Steam AppID.",
     }
 }
 
@@ -94,15 +96,29 @@ pub fn no_language_set() -> &'static str {
     "Please choose a language first.\n\nUse /start or /language."
 }
 
-pub fn query_too_long(lang: Lang) -> &'static str {
+pub fn app_id_only(lang: Lang) -> &'static str {
     match lang {
-        Lang::En => "The query is too long. Send a shorter AppID or game name.",
-        Lang::Es => "La consulta es demasiado larga. Envía un AppID o nombre más corto.",
-        Lang::Tr => "Sorgu çok uzun. Daha kısa bir AppID veya oyun adı gönderin.",
-        Lang::It => "La ricerca è troppo lunga. Invia un AppID o nome più breve.",
-        Lang::Fr => "La recherche est trop longue. Envoyez un AppID ou un nom plus court.",
-        Lang::De => "Die Anfrage ist zu lang. Sende eine kürzere AppID oder einen kürzeren Namen.",
-        Lang::Ru => "Запрос слишком длинный. Отправьте более короткий AppID или название игры.",
+        Lang::En => "For cloud mode I can only accept numeric Steam AppIDs, for example 730.",
+        Lang::Es => "En modo cloud solo acepto AppIDs numéricos de Steam, por ejemplo 730.",
+        Lang::Tr => "Bulut modunda yalnızca sayısal Steam AppID kabul ediyorum, örneğin 730.",
+        Lang::It => "In modalità cloud accetto solo AppID Steam numerici, per esempio 730.",
+        Lang::Fr => {
+            "En mode cloud, seuls les AppID Steam numériques sont acceptés, par exemple 730."
+        }
+        Lang::De => "Im Cloud-Modus akzeptiere ich nur numerische Steam-AppIDs, zum Beispiel 730.",
+        Lang::Ru => "В облачном режиме я принимаю только числовые Steam AppID, например 730.",
+    }
+}
+
+pub fn source_unavailable(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "The config source is unavailable right now. Try again later or change the source URL.",
+        Lang::Es => "La fuente de configs no está disponible ahora. Inténtalo más tarde o cambia la URL.",
+        Lang::Tr => "Config kaynağı şu anda kullanılamıyor. Daha sonra deneyin veya kaynak URL'sini değiştirin.",
+        Lang::It => "La sorgente dei config non è disponibile. Riprova più tardi o cambia URL.",
+        Lang::Fr => "La source de configs est indisponible. Réessayez plus tard ou changez l'URL.",
+        Lang::De => "Die Konfig-Quelle ist gerade nicht verfügbar. Später erneut versuchen oder URL ändern.",
+        Lang::Ru => "Источник конфигов сейчас недоступен. Попробуйте позже или поменяйте URL источника.",
     }
 }
 

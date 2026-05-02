@@ -5,12 +5,12 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile};
 use teloxide::utils::command::BotCommands;
 
 use crate::i18n::{texts, Lang, LangStore};
-use crate::search::finder::LuaFinder;
+use crate::source::{self, FetchError, FetchedKind, LuaSourceConfig};
 use crate::zip::packer;
 
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-const MAX_QUERY_CHARS: usize = 128;
+const MAX_APP_ID_DIGITS: usize = 10;
 
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase")]
@@ -77,7 +77,8 @@ pub async fn handle_text(
     bot: Bot,
     msg: Message,
     lang_store: Arc<LangStore>,
-    lua_finder: Arc<LuaFinder>,
+    source_config: Arc<LuaSourceConfig>,
+    http_client: reqwest::Client,
 ) -> HandlerResult {
     let text = match msg.text().map(str::trim) {
         Some(text) if !text.is_empty() => text,
@@ -94,62 +95,85 @@ pub async fn handle_text(
         }
     };
 
-    if text.chars().count() > MAX_QUERY_CHARS {
-        bot.send_message(msg.chat.id, texts::query_too_long(lang))
+    let Some(app_id) = parse_app_id(text) else {
+        bot.send_message(msg.chat.id, texts::app_id_only(lang))
             .await?;
         return Ok(());
-    }
+    };
 
-    let files = lua_finder.search(text);
-    if files.is_empty() {
-        bot.send_message(msg.chat.id, texts::not_found(lang))
-            .await?;
-        return Ok(());
-    }
-
-    bot.send_message(msg.chat.id, texts::sending_files(lang))
+    bot.send_message(msg.chat.id, texts::fetching_config(lang))
         .await?;
 
-    let archive_name = format!("{}.zip", archive_stem(text));
-    let pack_result = tokio::task::spawn_blocking(move || packer::pack_files(&files)).await;
+    let fetched = match source::fetch_config(&http_client, source_config.as_ref(), &app_id).await {
+        Ok(config) => config,
+        Err(FetchError::NotFound { attempts }) => {
+            log::info!("Config for AppID {} not found: {:?}", app_id, attempts);
+            bot.send_message(msg.chat.id, texts::not_found(lang))
+                .await?;
+            return Ok(());
+        }
+        Err(FetchError::Unavailable { attempts }) => {
+            log::error!(
+                "All Lua sources failed for AppID {}: {:?}",
+                app_id,
+                attempts
+            );
+            bot.send_message(msg.chat.id, texts::source_unavailable(lang))
+                .await?;
+            return Ok(());
+        }
+    };
 
-    match pack_result {
-        Ok(Ok(zip_bytes)) => {
-            let input_file = InputFile::memory(zip_bytes).file_name(archive_name);
-            bot.send_document(msg.chat.id, input_file).await?;
+    log::info!(
+        "Fetched AppID {} config from {} as {:?}",
+        app_id,
+        fetched.source_url,
+        fetched.kind
+    );
+
+    let archive_name = format!("{app_id}.zip");
+    let archive_bytes = match fetched.kind {
+        FetchedKind::Zip => fetched.bytes,
+        FetchedKind::Lua => {
+            let lua_bytes = fetched.bytes;
+            let app_id_for_zip = app_id.clone();
+            match tokio::task::spawn_blocking(move || {
+                packer::pack_lua_from_memory(&app_id_for_zip, &lua_bytes)
+            })
+            .await
+            {
+                Ok(Ok(zip_bytes)) => zip_bytes,
+                Ok(Err(err)) => {
+                    log::error!("Failed to pack Lua for AppID {}: {}", app_id, err);
+                    bot.send_message(msg.chat.id, texts::packing_error(lang))
+                        .await?;
+                    return Ok(());
+                }
+                Err(err) => {
+                    log::error!("Packing task failed for AppID {}: {}", app_id, err);
+                    bot.send_message(msg.chat.id, texts::packing_error(lang))
+                        .await?;
+                    return Ok(());
+                }
+            }
         }
-        Ok(Err(err)) => {
-            log::error!("Failed to pack files for query {:?}: {}", text, err);
-            bot.send_message(msg.chat.id, texts::packing_error(lang))
-                .await?;
-        }
-        Err(err) => {
-            log::error!("Packing task failed for query {:?}: {}", text, err);
-            bot.send_message(msg.chat.id, texts::packing_error(lang))
-                .await?;
-        }
-    }
+    };
+
+    let input_file = InputFile::memory(archive_bytes).file_name(archive_name);
+    bot.send_document(msg.chat.id, input_file).await?;
 
     Ok(())
 }
 
-fn archive_stem(query: &str) -> String {
-    let sanitized: String = query
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .take(64)
-        .collect();
+fn parse_app_id(text: &str) -> Option<String> {
+    let trimmed = text.trim();
 
-    let sanitized = sanitized.trim_matches('_');
-    if sanitized.is_empty() {
-        "kiwilua".to_owned()
-    } else {
-        sanitized.to_owned()
+    if trimmed.is_empty()
+        || trimmed.len() > MAX_APP_ID_DIGITS
+        || !trimmed.chars().all(|ch| ch.is_ascii_digit())
+    {
+        return None;
     }
+
+    Some(trimmed.to_owned())
 }
