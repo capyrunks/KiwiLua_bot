@@ -35,7 +35,7 @@ ENV PORT=7860
 ENV RUST_LOG=info
 ENV LUA_SOURCE_MAX_BYTES=52428800
 ENV LUA_SOURCE_TIMEOUT_SECS=20
-ENV LUA_SOURCE_URL_TEMPLATES="https://api.printedwaste.com/gfk/download/{app_id};https://cysaw.top/uploads/{app_id}.zip;https://furcate.eu/files/{app_id}.zip;https://raw.githubusercontent.com/Steam-Tools/Ryuu/main/database/{app_id}.lua"
+ENV LUA_SOURCE_URL_TEMPLATES="https://pub-5b6d3b7c03fd4ac1afb5bd3017850e20.r2.dev/{app_id}.zip"
 
 EXPOSE 7860
 

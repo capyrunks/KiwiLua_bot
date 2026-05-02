@@ -7,12 +7,8 @@ use reqwest::Client;
 const DEFAULT_MAX_DOWNLOAD_BYTES: usize = 50 * 1024 * 1024;
 const DEFAULT_SOURCE_TIMEOUT_SECS: u64 = 20;
 
-const DEFAULT_SOURCE_TEMPLATES: &[&str] = &[
-    "https://api.printedwaste.com/gfk/download/{app_id}",
-    "https://cysaw.top/uploads/{app_id}.zip",
-    "https://furcate.eu/files/{app_id}.zip",
-    "https://raw.githubusercontent.com/Steam-Tools/Ryuu/main/database/{app_id}.lua",
-];
+const DEFAULT_SOURCE_TEMPLATES: &[&str] =
+    &["https://pub-5b6d3b7c03fd4ac1afb5bd3017850e20.r2.dev/{app_id}.zip"];
 
 #[derive(Debug, Clone)]
 pub struct LuaSourceConfig {
