@@ -4,8 +4,8 @@ mod search;
 mod zip;
 
 use std::env;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 use axum::routing::get;
@@ -74,7 +74,14 @@ async fn run_telegram_bot() -> AppResult<()> {
         lua_finder.file_count()
     );
 
-    let bot = Bot::new(telegram_token()?);
+    // Создаем клиент с принудительным использованием IPv4.
+    // На некоторых хостингах (например, Back4App) IPv6 работает криво, что вызывает таймауты.
+    let reqwest_client = reqwest::Client::builder()
+        .local_address(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
+        .timeout(std::time::Duration::from_secs(60))
+        .build()?;
+
+    let bot = Bot::with_client(telegram_token()?, reqwest_client);
 
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![lang_store, lua_finder])
